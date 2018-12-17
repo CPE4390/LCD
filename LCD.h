@@ -10,9 +10,9 @@
 
 //Uncomment one of the modes below
 //#define LCD_MODE_DIRECT
-//#define LCD_MODE_EXP18
+#define LCD_MODE_EXP18
 //#define LCD_MODE_EXP8
-#define LCD_MODE_I2C
+//#define LCD_MODE_I2C
 //#define LCD_MODE_PMP
 
 #if defined LCD_MODE_DIRECT
