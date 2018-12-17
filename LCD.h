@@ -11,7 +11,6 @@
 //Uncomment one of the modes below
 //#define LCD_MODE_DIRECT
 #define LCD_MODE_EXP18
-//#define LCD_MODE_EXP8
 //#define LCD_MODE_I2C
 //#define LCD_MODE_PMP
 
@@ -34,13 +33,13 @@
 #define MSSPx           2   //1 or 2 to select MSSP1 or MSSP2 for I2C
 #endif
 
-#if defined LCD_MODE_EXP18 || defined LCD_MODE_PMP || defined LCD_MODE_EXP8
+#if defined LCD_MODE_EXP18 || defined LCD_MODE_PMP
 #define LCD_DATA_WIDTH  8  //Must be 8
 #endif
 
 //#define LCD_POLLING
 
-#define _XTAL_FREQ  64000000
+#define _XTAL_FREQ  32000000L
 
 #define LCD_ROWS    2
 #define LCD_CHARS   16

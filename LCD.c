@@ -333,70 +333,6 @@ void WriteRegister(char reg, char b) {
 
 #endif
 
-#if defined LCD_MODE_EXP8
-
-#define PORT_A  0x12
-#define PORT_B  0x13
-
-void WriteRegister(char, char);
-
-void LCDWriteByte(char c, char rs) {
-    unsigned char comFlags = 0;
-    if (rs) {
-        comFlags = 0b10000000;
-    }
-    WriteRegister(PORT_A, comFlags);
-    WriteRegister(PORT_B, c);
-    WriteRegister(PORT_A, comFlags | 0b01000000);
-    WriteRegister(PORT_A, comFlags);
-}
-
-char LCDReadByte(char rs) {
-    return 0;
-}
-
-void LCDInitPort(void) {
-    
-    PPSLOCK = 0x55;
-    PPSLOCK = 0xAA;
-    PPSLOCKbits.PPSLOCKED = 0;
-    RA2PPS = 0x20;  //SSout
-    RC3PPS = 0x1e;  //SCK
-    RC5PPS = 0x1f;  //SDO
-    SPI1SSPPS = 0x02; //SSin to RA2
-    TRISAbits.TRISA2 = 0;
-    TRISCbits.TRISC3 = 0;
-    TRISCbits.TRISC5 = 0;
-    ANSELAbits.ANSELA2 = 0;
-    ANSELCbits.ANSELC3 = 0;
-    ANSELCbits.ANSELC5 = 0;
-    SPI1CON1 = 0x44; //Mode 0,0 SS active low
-    SPI1CON2 = 0x02; //TX only
-    SPI1CLK = 0x00; //FOSC
-    SPI1BAUD = 0x03; // divide by 8 = 8 MHz
-    SPI1TWIDTH = 0x00; //8 bit transfer;        
-    SPI1CON0 = 0x82; //Enable, Master mode, BMODE = 0
-    WriteRegister(0, 0); //Set port A to outputs
-    WriteRegister(1, 0); //Set port B to outputs
-    WriteRegister(PORT_A, 0); //Clear port A (E and RS pins)
-}
-
-//*****************************************************************
-// Write to MCP23S17 register
-//*****************************************************************
-
-void WriteRegister(char reg, char b) {
-    SPI1INTFbits.EOSIF = 0;
-    SPI1TXB = 0x40;
-    SPI1TXB = reg;
-    SPI1TCNTL = 3;
-    while(PIR2bits.SPI1TXIF == 0);
-    SPI1TXB = b;
-    while (SPI1INTFbits.EOSIF == 0);
-}
-
-#endif
-
 #if defined LCD_MODE_PMP
 
 void LCDInitPort(void) {
@@ -519,38 +455,41 @@ char LCDReadByte(char rs) {
 #define E_OFF   0b11111011
 #define BACKLIGHT_ON    0b00001000
 
-//I2C1 uses RC3 = SCL  RC4 = SDA
+#define BAUD    ((_XTAL_FREQ / 400000) - 1)
+
+#if MSSPx == 1
+#define SSPxADD         SSPADD
+#define SSPxCON1bits    SSPCON1bits
+#define SSPxCON2bits    SSPCON2bits
+#define SSPxSTATbits    SSPSTATbits
+#define SSPxBUF         SSPBUF
+#define I2C_TRIS()      (TRISC |= 0b00011000)  //RC4=SDA, RC3=SCL
+//#define I2C_TRIS()    (TRISB |= 0b00000011)  //RB0=SDA, RB1=SCL
+#elif MSSPx == 2
+#define SSPxADD         SSP2ADD
+#define SSPxCON1bits    SSP2CON1bits
+#define SSPxCON2bits    SSP2CON2bits
+#define SSPxSTATbits    SSP2STATbits
+#define SSPxBUF         SSP2BUF
+#define I2C_TRIS()      (TRISD |= 0b01100000)  //RD5=SDA, RD6=SCL
+#else
+#error Invalid MSSPx selection
+#endif
 
 void LCDInitPort(void) {
-    TRISCbits.TRISC4 = 0;  //Need to be outputs even though datasheet says inputs
-    TRISCbits.TRISC3 = 0;
-    //RC3I2C = 0x41;
-    //RC4I2C = 0x41;
-    ODCONCbits.ODCC4 = 1;
-    ODCONCbits.ODCC3 = 1;
-    PPSLOCK = 0x55;
-    PPSLOCK = 0xAA;
-    PPSLOCKbits.PPSLOCKED = 0;
-    I2C1SCLPPS = 0b10011;
-    I2C1SDAPPS = 0b10100;
-    RC3PPS = 0b100001;
-    RC4PPS = 0b100010;
-    I2C1CON0bits.MODE = 0b100;  //Master 7 bit address
-    I2C1CLK = 0b1000;  //TMR6
-    T6CLKCON = 0x01;
-    T6HLT = 0x00; 
-    T6RST = 0x00;
-    T6PR = 0x1f;  //input clock is divided by 5 or 4 depending on FME
-    T6TMR = 0x00;
-    T6CON = 0x80;
-    I2C1ADB1 = LCD_I2C_ADDRESS;
-    I2C1CON1bits.ACKCNT = 1;
-    I2C1CON1bits.ACKDT = 0;
-    I2C1CON0bits.EN = 1;
-    I2C1CNT = 1;
-    I2C1CON0bits.S = 1;
-    I2C1TXB = BACKLIGHT_ON;
-    while (I2C1STAT0bits.MMA == 1);
+    I2C_TRIS();
+    SSPxADD = BAUD; //100kHz
+    SSPxCON1bits.SSPM = 0b1000;
+    SSPxCON1bits.SSPEN = 1;
+    Nop();
+    SSPxCON2bits.SEN = 1;
+    while (SSPxCON2bits.SEN == 1);
+    SSPxBUF = LCD_I2C_ADDRESS;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = BACKLIGHT_ON;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxCON2bits.PEN = 1;
+    while (SSPxCON2bits.PEN == 1);
 }
 
 void LCDWrite8(char c, char rs) {
@@ -559,13 +498,17 @@ void LCDWrite8(char c, char rs) {
     if (rs) {
         comFlags |= RS_ON;
     }
+    SSPxCON2bits.SEN = 1;
+    while (SSPxCON2bits.SEN == 1);
+    SSPxBUF = LCD_I2C_ADDRESS;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
     dataByte = c & 0b11110000;
-    I2C1CNT = 2;
-    I2C1TXB = dataByte | E_ON | comFlags;
-    I2C1CON0bits.S = 1;
-    while (I2C1STAT1bits.TXBE == 0);
-    I2C1TXB = dataByte | comFlags;
-    while (I2C1STAT0bits.MMA == 1);
+    SSPxBUF = dataByte | E_ON | comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = dataByte | comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxCON2bits.PEN = 1;
+    while (SSPxCON2bits.PEN == 1);
 }
 
 void LCDWriteByte(char c, char rs) {
@@ -574,20 +517,24 @@ void LCDWriteByte(char c, char rs) {
     if (rs) {
         comFlags |= RS_ON;
     }
+    SSPxCON2bits.SEN = 1;
+    while (SSPxCON2bits.SEN == 1);
+    SSPxBUF = LCD_I2C_ADDRESS;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
     dataByte = c & 0b11110000;
-    I2C1CNT = 5;
-    I2C1TXB = dataByte | E_ON | comFlags;
-    I2C1CON0bits.S = 1;
-    while (I2C1STAT1bits.TXBE == 0);
-    I2C1TXB = dataByte | comFlags;
+    SSPxBUF = dataByte | E_ON | comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = dataByte | comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
     dataByte = (c << 4) & 0b11110000;
-    while (I2C1STAT1bits.TXBE == 0);
-    I2C1TXB = dataByte | E_ON | comFlags;
-    while (I2C1STAT1bits.TXBE == 0);
-    I2C1TXB = dataByte | comFlags;
-    while (I2C1STAT1bits.TXBE == 0);
-    I2C1TXB = BACKLIGHT_ON;
-    while (I2C1STAT0bits.MMA == 1);
+    SSPxBUF = dataByte | E_ON | comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = dataByte | comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = BACKLIGHT_ON;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxCON2bits.PEN = 1;
+    while (SSPxCON2bits.PEN == 1);
 }
 
 char LCDReadNibble(char rs) {
@@ -596,27 +543,32 @@ char LCDReadNibble(char rs) {
     if (rs) {
         comFlags |= RS_ON;
     }
-    //I2C1CON0bits.RSEN = 1;
-    I2C1CNT = 2;
-    I2C1TXB = comFlags;
-    I2C1CON0bits.S = 1;
-    while (I2C1STAT1bits.TXBE == 0);
-    I2C1TXB = comFlags | E_ON;
-    while (I2C1STAT0bits.MMA == 1);
-    I2C1ADB1 = LCD_I2C_ADDRESS | 1;
-    I2C1CNT = 1;
-    //I2C1CON0bits.RSEN = 0;
-    I2C1CON0bits.S = 1;
-    while (I2C1STAT1bits.RXBF == 0);
-    b = I2C1RXB;
-    b &= 0b11110000;
-    while (I2C1STAT0bits.MMA == 1);
-    I2C1ADB1 = LCD_I2C_ADDRESS;
-    I2C1CNT = 1;
-    I2C1TXB = comFlags;
-    //I2C1CON0bits.RSEN = 0;
-    I2C1CON0bits.S = 1;
-    while (I2C1STAT0bits.MMA == 1);
+    SSPxCON2bits.SEN = 1; //Start
+    while (SSPxCON2bits.SEN == 1);
+    SSPxBUF = LCD_I2C_ADDRESS;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = comFlags | E_ON;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxCON2bits.RSEN = 1; //restart
+    while (SSPxCON2bits.RSEN == 1);
+    SSPxBUF = LCD_I2C_ADDRESS | 1;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxCON2bits.RCEN = 1;
+    while (SSPxSTATbits.BF == 0); //Wait for byte
+    b = SSPxBUF & 0b11110000; //Upper nibble
+    SSPxCON2bits.ACKDT = 1;
+    SSPxCON2bits.ACKEN = 1; //Send NACK
+    while (SSPxCON2bits.ACKEN == 1);
+    SSPxCON2bits.RSEN = 1; //restart
+    while (SSPxCON2bits.RSEN == 1);
+    SSPxBUF = LCD_I2C_ADDRESS;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxBUF = comFlags;
+    while (SSPxSTATbits.BF || SSPxSTATbits.R_W);
+    SSPxCON2bits.PEN = 1; //stop
+    while (SSPxCON2bits.PEN == 1);
     return b;
 }
 
@@ -624,8 +576,7 @@ char LCDReadByte(char rs) {
     unsigned char ub;
     unsigned char lb;
     ub = LCDReadNibble(rs);
-    //FIXME Get read working
-    //lb = LCDReadNibble(rs);
+    lb = LCDReadNibble(rs);
     return ub | (lb >> 4);
 }
 
