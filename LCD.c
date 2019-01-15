@@ -1,6 +1,10 @@
 #include <xc.h>
 #include "LCD.h"
 
+#pragma warning push
+#pragma warning disable 520
+#pragma warning disable 1498
+
 //Functions below must be defined for the interface
 void LCDWriteByte(char c, char rs);
 char LCDReadByte(char rs);
@@ -581,3 +585,5 @@ char LCDReadByte(char rs) {
 }
 
 #endif
+
+#pragma warning pop
