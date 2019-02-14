@@ -60,8 +60,8 @@ void LCDGetPos(int *row, int *col);
 void LCDLoadCustomChar(const char *pixels, char pattern);
 void LCDScroll(signed char dir);
 void LCDDisplay(char enableDisplay, char enableCursor, char blink);
-#pragma	printf_check(LCDprintf) const
-int LCDprintf(int line, const char *format, ...);
+#pragma	printf_check(lprintf) const
+int lprintf(int line, const char *format, ...);
 
 #endif	/* LCD_H */
 

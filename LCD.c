@@ -190,7 +190,7 @@ void LCDDisplay(char enableDisplay, char enableCursor, char blink) {
     LCDCommand(command);
 }
 
-int LCDprintf(int line, const char *format, ...) {
+int lprintf(int line, const char *format, ...) {
     char str[LCD_CHARS + 1];
     int result;
     va_list args;
