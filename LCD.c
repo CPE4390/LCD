@@ -1,5 +1,7 @@
 #include <xc.h>
 #include "LCD.h"
+#include <stdio.h>
+#include <stdarg.h>
 
 #pragma warning push
 #pragma warning disable 520
@@ -186,6 +188,18 @@ void LCDDisplay(char enableDisplay, char enableCursor, char blink) {
         command |= 0b00000001;
     }
     LCDCommand(command);
+}
+
+int LCDprintf(int line, const char *format, ...) {
+    char str[LCD_CHARS + 1];
+    int result;
+    va_list args;
+    va_start(args, format);
+    result = vsnprintf(str, LCD_CHARS + 1, format, args);
+    va_end(args);
+    LCDClearLine(line);
+    LCDWriteLine(str, line);
+    return result;
 }
 
 void LCDCommand(unsigned char command) {
